@@ -11,12 +11,17 @@ const FabricComponent = () => {
   const ZOOM_MIN = 0.2
   const ZOOM_MAX = 5
 
+  // Padding values
+  const PADDING_TOP = 50
+  const PADDING_LEFT = 50
+  const PADDING_RIGHT = 50
+
   // Grid options
   const gridOptions = {
     lineCount: 25,
     distance: 15,
     param: {
-      // stroke: "#ebebeb",
+      stroke: "#d3d3d3", // Light gray
       strokeWidth: 1,
       selectable: false,
     },
@@ -36,12 +41,12 @@ const FabricComponent = () => {
 
       const horizontal = new Line(
         [distance, 0, distance, gridOptions.lineCount * gridOptions.distance],
-        gridOptions.param,
+        gridOptions.param
       )
 
       const vertical = new Line(
         [0, distance, gridOptions.lineCount * gridOptions.distance, distance],
-        gridOptions.param,
+        gridOptions.param
       )
 
       lines.push([vertical, horizontal])
@@ -51,8 +56,8 @@ const FabricComponent = () => {
 
       // Make every 5th line darker
       if (i % 5 === 0) {
-        horizontal.set({ stroke: "#cccccc" })
-        vertical.set({ stroke: "#cccccc" })
+        horizontal.set({ stroke: "#a9a9a9" }) // Darker light gray
+        vertical.set({ stroke: "#a9a9a9" })
       }
     }
 
@@ -101,7 +106,6 @@ const FabricComponent = () => {
 
         pattern.patternTransform = [1 / zoom, 0, 0, 1 / zoom, 0, 0]
 
-        // In Fabric.js v6, we use set() instead of setBackgroundColor
         canvas.set("backgroundColor", pattern)
         canvas.requestRenderAll()
       },
@@ -110,10 +114,11 @@ const FabricComponent = () => {
 
   useEffect(() => {
     if (canvasRef.current && !fabricCanvasRef.current) {
-      // Initialize canvas
+      // Initialize canvas with adjusted dimensions for left and right padding
       const canvas = new Canvas(canvasRef.current, {
-        width: window.innerWidth,
-        height: window.innerHeight,
+        width: window.innerWidth - PADDING_LEFT - PADDING_RIGHT,
+        height: window.innerHeight - PADDING_TOP,
+        backgroundColor: "#ffffff", // White background
         selection: true,
       })
 
@@ -131,7 +136,7 @@ const FabricComponent = () => {
       let lastPosY = 0
 
       canvas.on("mouse:down", (opt) => {
-        const evt = opt.e 
+        const evt = opt.e
         if (!opt.target) {
           isDragging = true
           lastPosX = evt.clientX
@@ -142,7 +147,7 @@ const FabricComponent = () => {
 
       canvas.on("mouse:move", (opt) => {
         if (isDragging) {
-          const evt = opt.e 
+          const evt = opt.e
           const deltaX = evt.clientX - lastPosX
           const deltaY = evt.clientY - lastPosY
 
@@ -160,7 +165,7 @@ const FabricComponent = () => {
 
       // Zoom logic
       canvas.on("mouse:wheel", (opt) => {
-        const evt = opt.e 
+        const evt = opt.e
         evt.preventDefault()
         evt.stopPropagation()
 
@@ -180,11 +185,11 @@ const FabricComponent = () => {
         grid.updateForZoom(zoom)
       })
 
-      // Handle window resize
+      // Handle window resize with padding
       const handleResize = () => {
         canvas.setDimensions({
-          width: window.innerWidth,
-          height: window.innerHeight,
+          width: window.innerWidth - PADDING_LEFT - PADDING_RIGHT,
+          height: window.innerHeight - PADDING_TOP,
         })
         canvas.requestRenderAll()
       }
@@ -221,13 +226,20 @@ const FabricComponent = () => {
 
   return (
     <div style={{ position: "relative" }}>
-      <button style={{ position: "absolute", top: 20, left:20, zIndex: 999 }} onClick={addRectangle}>
+      <button style={{ position: "absolute", top: 20, left: 20, zIndex: 999 }} onClick={addRectangle}>
         Add Rectangle
       </button>
-      <canvas ref={canvasRef} style={{ position: "fixed", top: 0, left: 0 }} />
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: "fixed",
+          top: PADDING_TOP,
+          left: PADDING_LEFT,
+          right: PADDING_RIGHT, 
+        }}
+      />
     </div>
   )
 }
 
 export default FabricComponent
-
