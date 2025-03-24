@@ -1,144 +1,206 @@
-// src/Canvas.tsx
-import React, { useEffect, useRef } from "react";
-import { Canvas, Rect, Line } from "fabric";
+"use client"
+
+import { useEffect, useRef } from "react"
+import { Canvas, Rect, Line, StaticCanvas, Pattern } from "fabric"
 
 const FabricComponent = () => {
-  const canvasRef = useRef(null);
-  const fabricCanvasRef = useRef(null);
+  const canvasRef = useRef(null)
+  const fabricCanvasRef = useRef(null)
 
-  // Function to draw the grid dynamically based on zoom and pan
-  const drawGrid = (canvas) => {
-    const gridSize = 50;
-    const zoom = canvas.getZoom();
-    const width = canvas.getWidth() / zoom;
-    const height = canvas.getHeight() / zoom;
-    const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
-    const panX = vpt[4] / zoom;
-    const panY = vpt[5] / zoom;
+  // Constants for zoom limits
+  const ZOOM_MIN = 0.2
+  const ZOOM_MAX = 5
 
-    // Remove existing grid lines
-    canvas.getObjects().forEach((obj) => {
-      if (!obj.selectable) {
-        canvas.remove(obj);
+  // Grid options
+  const gridOptions = {
+    lineCount: 25,
+    distance: 15,
+    param: {
+      // stroke: "#ebebeb",
+      strokeWidth: 1,
+      selectable: false,
+    },
+  }
+
+  // Create grid pattern
+  const createGridPattern = (canvas) => {
+    const staticCanvas = new StaticCanvas()
+    staticCanvas.setHeight(gridOptions.distance * gridOptions.lineCount)
+    staticCanvas.setWidth(gridOptions.distance * gridOptions.lineCount)
+
+    const lines = []
+
+    // Create grid lines
+    for (let i = 0; i < gridOptions.lineCount; i++) {
+      const distance = i * gridOptions.distance
+
+      const horizontal = new Line(
+        [distance, 0, distance, gridOptions.lineCount * gridOptions.distance],
+        gridOptions.param,
+      )
+
+      const vertical = new Line(
+        [0, distance, gridOptions.lineCount * gridOptions.distance, distance],
+        gridOptions.param,
+      )
+
+      lines.push([vertical, horizontal])
+
+      staticCanvas.add(horizontal)
+      staticCanvas.add(vertical)
+
+      // Make every 5th line darker
+      if (i % 5 === 0) {
+        horizontal.set({ stroke: "#cccccc" })
+        vertical.set({ stroke: "#cccccc" })
       }
-    });
-
-    // Draw vertical grid lines
-    for (let x = panX % gridSize; x < width + panX; x += gridSize) {
-      canvas.add(
-        new Line([x, -height, x, height * 2], {
-          stroke: "#ccc",
-          selectable: false,
-          evented: false,
-        })
-      );
     }
 
-    // Draw horizontal grid lines
-    for (let y = panY % gridSize; y < height + panY; y += gridSize) {
-      canvas.add(
-        new Line([-width, y, width * 2, y], {
-          stroke: "#ccc",
-          selectable: false,
-          evented: false,
-        })
-      );
+    // Function to get coefficient based on zoom level
+    const getCoefficient = (zoom) => {
+      let coefficient = gridOptions.distance
+      let min = ZOOM_MIN
+
+      while (min < ZOOM_MAX) {
+        if (min <= zoom) {
+          coefficient = gridOptions.distance / min
+        }
+        min *= 5
+      }
+
+      return coefficient
     }
 
-    // Ensure grid lines are at the back by re-adding selectable objects
-    const selectableObjects = canvas.getObjects().filter((obj) => obj.selectable);
-    selectableObjects.forEach((obj) => {
-      canvas.remove(obj);
-      canvas.add(obj); // Re-adding moves it to the top
-    });
-  };
+    // Return function to update grid based on zoom
+    return {
+      updateForZoom: (zoom) => {
+        const coefficient = getCoefficient(zoom)
+        const distance = coefficient * zoom
+
+        staticCanvas.setHeight(distance * gridOptions.lineCount)
+        staticCanvas.setWidth(distance * gridOptions.lineCount)
+
+        lines.forEach(([verticalLine, horizontalLine], i) => {
+          verticalLine.set({
+            top: i * distance,
+            width: distance * gridOptions.lineCount,
+          })
+          verticalLine.setCoords()
+
+          horizontalLine.set({
+            left: i * distance,
+            height: distance * gridOptions.lineCount,
+          })
+          horizontalLine.setCoords()
+        })
+
+        const pattern = new Pattern({
+          source: staticCanvas.toCanvasElement(),
+          repeat: "repeat",
+        })
+
+        pattern.patternTransform = [1 / zoom, 0, 0, 1 / zoom, 0, 0]
+
+        // In Fabric.js v6, we use set() instead of setBackgroundColor
+        canvas.set("backgroundColor", pattern)
+        canvas.requestRenderAll()
+      },
+    }
+  }
 
   useEffect(() => {
-    let canvas = null;
-
     if (canvasRef.current && !fabricCanvasRef.current) {
-      canvas = new Canvas(canvasRef.current, {
+      // Initialize canvas
+      const canvas = new Canvas(canvasRef.current, {
         width: window.innerWidth,
         height: window.innerHeight,
-        backgroundColor: "#f0f0f0",
-        selection: true, // Enable object selection
-      });
-      fabricCanvasRef.current = canvas;
+        selection: true,
+      })
 
-      // Panning logic (infinite canvas)
-      let isDragging = false;
-      let lastPosX = 0;
-      let lastPosY = 0;
+      fabricCanvasRef.current = canvas
+
+      // Create grid pattern
+      const grid = createGridPattern(canvas)
+
+      // Initialize grid with zoom level 1
+      grid.updateForZoom(1)
+
+      // Panning logic
+      let isDragging = false
+      let lastPosX = 0
+      let lastPosY = 0
 
       canvas.on("mouse:down", (opt) => {
-        const evt = opt.e ;
-        if (!opt.target) { // Only pan if no object is selected
-          isDragging = true;
-          lastPosX = evt.clientX;
-          lastPosY = evt.clientY;
+        const evt = opt.e 
+        if (!opt.target) {
+          isDragging = true
+          lastPosX = evt.clientX
+          lastPosY = evt.clientY
+          canvas.setCursor("grabbing")
         }
-      });
+      })
 
       canvas.on("mouse:move", (opt) => {
         if (isDragging) {
-          const evt = opt.e ;
-          const deltaX = evt.clientX - lastPosX;
-          const deltaY = evt.clientY - lastPosY;
-          const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
-          vpt[4] += deltaX; // Pan horizontally
-          vpt[5] += deltaY; // Pan vertically
-          canvas.setViewportTransform(vpt);
-          lastPosX = evt.clientX;
-          lastPosY = evt.clientY;
-          canvas.requestRenderAll();
+          const evt = opt.e 
+          const deltaX = evt.clientX - lastPosX
+          const deltaY = evt.clientY - lastPosY
+
+          canvas.relativePan({ x: deltaX, y: deltaY })
+
+          lastPosX = evt.clientX
+          lastPosY = evt.clientY
         }
-      });
+      })
 
       canvas.on("mouse:up", () => {
-        isDragging = false;
-      });
+        isDragging = false
+        canvas.setCursor("default")
+      })
 
       // Zoom logic
       canvas.on("mouse:wheel", (opt) => {
-        const delta = opt.e.deltaY;
-        let zoom = canvas.getZoom();
-        zoom *= 0.999 ** delta;
-        zoom = Math.max(0.1, Math.min(zoom, 5)); // Limit zoom between 0.1x and 5x
-        canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
-        opt.e.preventDefault();
-        opt.e.stopPropagation();
-        canvas.requestRenderAll();
-      });
+        const evt = opt.e 
+        evt.preventDefault()
+        evt.stopPropagation()
 
-      // Optimize grid rendering
-      let lastZoom = canvas.getZoom();
-      let lastVpt = canvas.viewportTransform?.slice() || [1, 0, 0, 1, 0, 0];
-      canvas.on("after:render", () => {
-        const currentZoom = canvas.getZoom();
-        const currentVpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
-        if (
-          currentZoom !== lastZoom ||
-          currentVpt[4] !== lastVpt[4] ||
-          currentVpt[5] !== lastVpt[5]
-        ) {
-          drawGrid(canvas);
-          lastZoom = currentZoom;
-          lastVpt = currentVpt.slice();
-        }
-      });
+        const delta = evt.deltaY
+        let zoom = canvas.getZoom()
 
-      // Initial grid render
-      drawGrid(canvas);
-    }
+        // Adjust zoom factor based on wheel direction
+        zoom *= 0.999 ** delta
 
-    // Cleanup on unmount
-    return () => {
-      if (fabricCanvasRef.current) {
-        fabricCanvasRef.current.dispose();
-        fabricCanvasRef.current = null;
+        // Limit zoom
+        zoom = Math.max(ZOOM_MIN, Math.min(zoom, ZOOM_MAX))
+
+        // Zoom to point
+        canvas.zoomToPoint({ x: evt.offsetX, y: evt.offsetY }, zoom)
+
+        // Update grid pattern for new zoom level
+        grid.updateForZoom(zoom)
+      })
+
+      // Handle window resize
+      const handleResize = () => {
+        canvas.setDimensions({
+          width: window.innerWidth,
+          height: window.innerHeight,
+        })
+        canvas.requestRenderAll()
       }
-    };
-  }, []); // Empty dependency array ensures this runs only once
+
+      window.addEventListener("resize", handleResize)
+
+      // Cleanup on unmount
+      return () => {
+        window.removeEventListener("resize", handleResize)
+        if (fabricCanvasRef.current) {
+          fabricCanvasRef.current.dispose()
+          fabricCanvasRef.current = null
+        }
+      }
+    }
+  }, [])
 
   // Function to add a rectangle
   const addRectangle = () => {
@@ -150,24 +212,22 @@ const FabricComponent = () => {
         height: 100,
         fill: "blue",
         selectable: true,
-      });
-      fabricCanvasRef.current.add(rect);
-      fabricCanvasRef.current.setActiveObject(rect);
-      fabricCanvasRef.current.requestRenderAll();
+      })
+      fabricCanvasRef.current.add(rect)
+      fabricCanvasRef.current.setActiveObject(rect)
+      fabricCanvasRef.current.requestRenderAll()
     }
-  };
+  }
 
   return (
     <div style={{ position: "relative" }}>
-      <button
-        style={{ position: "absolute", top: 10, left: 10, zIndex: 999 }}
-        onClick={addRectangle}
-      >
+      <button style={{ position: "absolute", top: 20, left:20, zIndex: 999 }} onClick={addRectangle}>
         Add Rectangle
       </button>
       <canvas ref={canvasRef} style={{ position: "fixed", top: 0, left: 0 }} />
     </div>
-  );
-};
+  )
+}
 
-export default FabricComponent;
+export default FabricComponent
+
