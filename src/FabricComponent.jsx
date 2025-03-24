@@ -1,17 +1,19 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Canvas, Rect, Line, StaticCanvas, Pattern } from "fabric"
 
 const FabricComponent = () => {
   const canvasRef = useRef(null)
   const fabricCanvasRef = useRef(null)
+  const [zoomLevel, setZoomLevel] = useState(1) // State for zoom level
+  const [coords, setCoords] = useState({ left: 0, right: 0, top: 0, bottom: 0 }) // State for visible coordinates
 
   // Constants for zoom limits
   const ZOOM_MIN = 0.2
   const ZOOM_MAX = 5
 
-  // Padding values
+  // Padding values in pixels
   const PADDING_TOP = 50
   const PADDING_LEFT = 50
   const PADDING_RIGHT = 50
@@ -35,48 +37,39 @@ const FabricComponent = () => {
 
     const lines = []
 
-    // Create grid lines
     for (let i = 0; i < gridOptions.lineCount; i++) {
       const distance = i * gridOptions.distance
-
       const horizontal = new Line(
         [distance, 0, distance, gridOptions.lineCount * gridOptions.distance],
         gridOptions.param
       )
-
       const vertical = new Line(
         [0, distance, gridOptions.lineCount * gridOptions.distance, distance],
         gridOptions.param
       )
 
       lines.push([vertical, horizontal])
-
       staticCanvas.add(horizontal)
       staticCanvas.add(vertical)
 
-      // Make every 5th line darker
       if (i % 5 === 0) {
         horizontal.set({ stroke: "#a9a9a9" }) // Darker light gray
         vertical.set({ stroke: "#a9a9a9" })
       }
     }
 
-    // Function to get coefficient based on zoom level
     const getCoefficient = (zoom) => {
       let coefficient = gridOptions.distance
       let min = ZOOM_MIN
-
       while (min < ZOOM_MAX) {
         if (min <= zoom) {
           coefficient = gridOptions.distance / min
         }
         min *= 5
       }
-
       return coefficient
     }
 
-    // Return function to update grid based on zoom
     return {
       updateForZoom: (zoom) => {
         const coefficient = getCoefficient(zoom)
@@ -105,30 +98,41 @@ const FabricComponent = () => {
         })
 
         pattern.patternTransform = [1 / zoom, 0, 0, 1 / zoom, 0, 0]
-
         canvas.set("backgroundColor", pattern)
         canvas.requestRenderAll()
       },
     }
   }
 
+  // Calculate visible coordinates
+  const updateVisibleCoords = (canvas) => {
+    const zoom = canvas.getZoom()
+    const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0]
+    const width = canvas.getWidth()
+    const height = canvas.getHeight()
+
+    const left = -vpt[4] / zoom
+    const right = left + width / zoom
+    const top = -vpt[5] / zoom
+    const bottom = top + height / zoom
+
+    setCoords({ left, right, top, bottom })
+  }
+
   useEffect(() => {
     if (canvasRef.current && !fabricCanvasRef.current) {
-      // Initialize canvas with adjusted dimensions for left and right padding
       const canvas = new Canvas(canvasRef.current, {
-        width: window.innerWidth - PADDING_LEFT - PADDING_RIGHT,
-        height: window.innerHeight - PADDING_TOP,
-        backgroundColor: "#ffffff", // White background
+        width: window.innerWidth, // Full viewport width
+        height: window.innerHeight, // Full viewport height
+        backgroundColor: "#ffffff",
         selection: true,
       })
-
       fabricCanvasRef.current = canvas
 
-      // Create grid pattern
       const grid = createGridPattern(canvas)
-
-      // Initialize grid with zoom level 1
-      grid.updateForZoom(1)
+      grid.updateForZoom(1) // Initial zoom
+      setZoomLevel(1)
+      updateVisibleCoords(canvas)
 
       // Panning logic
       let isDragging = false
@@ -152,9 +156,9 @@ const FabricComponent = () => {
           const deltaY = evt.clientY - lastPosY
 
           canvas.relativePan({ x: deltaX, y: deltaY })
-
           lastPosX = evt.clientX
           lastPosY = evt.clientY
+          updateVisibleCoords(canvas) // Update coords on pan
         }
       })
 
@@ -171,32 +175,27 @@ const FabricComponent = () => {
 
         const delta = evt.deltaY
         let zoom = canvas.getZoom()
-
-        // Adjust zoom factor based on wheel direction
         zoom *= 0.999 ** delta
-
-        // Limit zoom
         zoom = Math.max(ZOOM_MIN, Math.min(zoom, ZOOM_MAX))
 
-        // Zoom to point
         canvas.zoomToPoint({ x: evt.offsetX, y: evt.offsetY }, zoom)
-
-        // Update grid pattern for new zoom level
         grid.updateForZoom(zoom)
+        setZoomLevel(zoom) // Update zoom level display
+        updateVisibleCoords(canvas) // Update coords on zoom
       })
 
-      // Handle window resize with padding
+      // Handle window resize
       const handleResize = () => {
         canvas.setDimensions({
-          width: window.innerWidth - PADDING_LEFT - PADDING_RIGHT,
-          height: window.innerHeight - PADDING_TOP,
+          width: window.innerWidth,
+          height: window.innerHeight,
         })
         canvas.requestRenderAll()
+        updateVisibleCoords(canvas) // Update coords on resize
       }
 
       window.addEventListener("resize", handleResize)
 
-      // Cleanup on unmount
       return () => {
         window.removeEventListener("resize", handleResize)
         if (fabricCanvasRef.current) {
@@ -207,7 +206,6 @@ const FabricComponent = () => {
     }
   }, [])
 
-  // Function to add a rectangle
   const addRectangle = () => {
     if (fabricCanvasRef.current) {
       const rect = new Rect({
@@ -225,19 +223,45 @@ const FabricComponent = () => {
   }
 
   return (
-    <div style={{ position: "relative" }}>
-      <button style={{ position: "absolute", top: 20, left: 20, zIndex: 999 }} onClick={addRectangle}>
-        Add Rectangle
-      </button>
+    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
       <canvas
         ref={canvasRef}
         style={{
           position: "fixed",
-          top: PADDING_TOP,
-          left: PADDING_LEFT,
-          right: PADDING_RIGHT, 
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
         }}
       />
+      <button
+        style={{
+          position: "absolute",
+          top: PADDING_TOP / 2, // Center vertically in top padding
+          left: PADDING_LEFT / 2, // Center horizontally in left padding
+          zIndex: 999,
+        }}
+        onClick={addRectangle}
+      >
+        Add Rectangle
+      </button>
+      <div
+        style={{
+          position: "absolute",
+          top: PADDING_TOP / 2, // Center vertically in top padding
+          right: PADDING_RIGHT / 2, // Center horizontally in right padding
+          zIndex: 999,
+          background: "rgba(255, 255, 255, 0.8)",
+          padding: "5px 10px",
+          borderRadius: "4px",
+        }}
+      >
+        <div>Zoom: {zoomLevel.toFixed(2)}x</div>
+        <div>Left: {coords.left.toFixed(0)}</div>
+        <div>Right: {coords.right.toFixed(0)}</div>
+        <div>Top: {coords.top.toFixed(0)}</div>
+        <div>Bottom: {coords.bottom.toFixed(0)}</div>
+      </div>
     </div>
   )
 }
