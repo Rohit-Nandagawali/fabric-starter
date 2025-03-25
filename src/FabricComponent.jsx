@@ -13,10 +13,9 @@ const FabricComponent = () => {
   const ZOOM_MIN = 0.2
   const ZOOM_MAX = 5
 
-  // Padding values in pixels
-  const PADDING_TOP = 50
-  const PADDING_LEFT = 50
-  const PADDING_RIGHT = 50
+  // Margin values
+  const MARGIN_TOP = "15vh"
+  const MARGIN_SIDES = "15vw"
 
   // Grid options
   const gridOptions = {
@@ -121,9 +120,15 @@ const FabricComponent = () => {
 
   useEffect(() => {
     if (canvasRef.current && !fabricCanvasRef.current) {
+      // Calculate canvas dimensions based on margins
+      const topMargin = window.innerHeight * 0.15 // 15vh
+      const sideMargin = window.innerWidth * 0.15 // 15vw
+      const canvasWidth = window.innerWidth - 2 * sideMargin
+      const canvasHeight = window.innerHeight - topMargin
+
       const canvas = new Canvas(canvasRef.current, {
-        width: window.innerWidth, // Full viewport width
-        height: window.innerHeight, // Full viewport height
+        width: canvasWidth,
+        height: canvasHeight,
         backgroundColor: "#ffffff",
         selection: true,
       })
@@ -186,9 +191,14 @@ const FabricComponent = () => {
 
       // Handle window resize
       const handleResize = () => {
+        const topMargin = window.innerHeight * 0.15
+        const sideMargin = window.innerWidth * 0.15
+        const canvasWidth = window.innerWidth - 2 * sideMargin
+        const canvasHeight = window.innerHeight - topMargin
+
         canvas.setDimensions({
-          width: window.innerWidth,
-          height: window.innerHeight,
+          width: canvasWidth,
+          height: canvasHeight,
         })
         canvas.requestRenderAll()
         updateVisibleCoords(canvas) // Update coords on resize
@@ -223,37 +233,18 @@ const FabricComponent = () => {
   }
 
   return (
-    <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
-      <canvas
-        ref={canvasRef}
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          width: "100vw",
-          height: "100vh",
-        }}
-      />
-      <button
-        style={{
-          position: "absolute",
-          top: PADDING_TOP / 2, // Center vertically in top padding
-          left: PADDING_LEFT / 2, // Center horizontally in left padding
-          zIndex: 999,
-        }}
-        onClick={addRectangle}
-      >
-        Add Rectangle
-      </button>
+    <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
+      {/* Information Card - Top Right */}
       <div
         style={{
           position: "absolute",
-          top: PADDING_TOP / 2, // Center vertically in top padding
-          right: PADDING_RIGHT / 2, // Center horizontally in right padding
+          top: "20px",
+          right: "20px",
           zIndex: 999,
-          background: "rgba(255, 255, 255, 0.8)",
-          padding: "5px 10px",
-          borderRadius: "4px",
+          background: "white",
+          padding: "10px 15px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
         }}
       >
         <div>Zoom: {zoomLevel.toFixed(2)}x</div>
@@ -261,6 +252,49 @@ const FabricComponent = () => {
         <div>Right: {coords.right.toFixed(0)}</div>
         <div>Top: {coords.top.toFixed(0)}</div>
         <div>Bottom: {coords.bottom.toFixed(0)}</div>
+      </div>
+
+      {/* Add Rectangle Button - Left Side */}
+      <button
+        style={{
+          position: "absolute",
+          top: "10%",
+          left: "20px",
+          zIndex: 999,
+          padding: "10px 15px",
+          background: "#4285f4",
+          color: "white",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+          transform: "translateY(-50%)",
+        }}
+        onClick={addRectangle}
+      >
+        Add Rectangle
+      </button>
+
+      {/* Canvas with margins */}
+      <div
+        style={{
+          position: "absolute",
+          top: MARGIN_TOP,
+          left: MARGIN_SIDES,
+          right: MARGIN_SIDES,
+          bottom: 0,
+          overflow: "hidden",
+          border: "1px solid #e0e0e0",
+          borderRadius: "4px",
+          boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          style={{
+            width: "100%",
+            height: "100%",
+          }}
+        />
       </div>
     </div>
   )
